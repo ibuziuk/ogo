@@ -161,10 +161,24 @@ func (r *OpenShellGatewayReconciler) Reconcile(ctx context.Context, req ctrl.Req
 		{"JWTKeys", r.reconcileJWTKeys},
 		{"AuthBridgeKeys", r.reconcileAuthBridgeKeys},
 		{"ConfigMap", r.reconcileConfigMap},
+	}
+
+	// OAuthClient secret must exist before the Deployment references it
+	if isOCP && authBridgeEnabled(gw, isOCP) {
+		steps = append(steps, struct {
+			name string
+			fn   func(context.Context, *ogov1alpha1.OpenShellGateway) error
+		}{"OAuthClient", r.reconcileOAuthClient})
+	}
+
+	steps = append(steps, []struct {
+		name string
+		fn   func(context.Context, *ogov1alpha1.OpenShellGateway) error
+	}{
 		{"Deployment", r.reconcileDeployment},
 		{"Service", r.reconcileService},
 		{"NetworkPolicy", r.reconcileNetworkPolicy},
-	}
+	}...)
 
 	for _, step := range steps {
 		if err := step.fn(ctx, gw); err != nil {
@@ -200,10 +214,6 @@ func (r *OpenShellGatewayReconciler) Reconcile(ctx context.Context, req ctrl.Req
 			if err := r.reconcileAuthBridgeRoute(ctx, gw); err != nil {
 				log.Error(err, "Failed to reconcile auth-bridge Route")
 				return ctrl.Result{RequeueAfter: 30 * time.Second}, r.setDegraded(ctx, gw, "AuthBridgeRoute", err)
-			}
-			if err := r.reconcileOAuthClient(ctx, gw); err != nil {
-				log.Error(err, "Failed to reconcile OAuthClient")
-				return ctrl.Result{RequeueAfter: 30 * time.Second}, r.setDegraded(ctx, gw, "OAuthClient", err)
 			}
 		}
 	}
