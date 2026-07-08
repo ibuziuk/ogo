@@ -755,14 +755,16 @@ func (r *OpenShellGatewayReconciler) reconcileDeployment(ctx context.Context, gw
 		}
 
 		containers := []corev1.Container{container}
+		var initContainers []corev1.Container
 
 		if authBridgeEnabled(gw, isOCP) {
 			authBridgeIssuer := authBridgeInternalURL(gw)
 			authBridgeExtIssuer := authBridgeExternalURL(gw)
 			oauthServerURL := "https://oauth-openshift." + clusterDomain(gw)
-			containers = append(containers, corev1.Container{
-				Name:  "auth-bridge",
-				Image: authBridgeImage(gw),
+			initContainers = append(initContainers, corev1.Container{
+				Name:          "auth-bridge",
+				Image:         authBridgeImage(gw),
+				RestartPolicy: ptr.To(corev1.ContainerRestartPolicyAlways),
 				Env: []corev1.EnvVar{
 					{Name: "AUTH_BRIDGE_ISSUER", Value: authBridgeIssuer},
 					{Name: "AUTH_BRIDGE_EXTERNAL_ISSUER", Value: authBridgeExtIssuer},
@@ -820,6 +822,7 @@ func (r *OpenShellGatewayReconciler) reconcileDeployment(ctx context.Context, gw
 		podSpec := corev1.PodSpec{
 			ServiceAccountName:            gw.Name,
 			TerminationGracePeriodSeconds: ptr.To(int64(5)),
+			InitContainers:                initContainers,
 			Containers:                    containers,
 			Volumes:                       volumes,
 		}
